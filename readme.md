@@ -183,7 +183,9 @@ common.table_for_each(building)
 
 This simply prints the key and the value for each item in the table.
 > price=>256850.25
+>
 > manager=>John
+>
 > size=>250
 
 To check if a value exists in a table
@@ -202,7 +204,9 @@ common.table_for_each(common.table_keys(building))
 ```
 
 > 1=>price
+>
 > 2=>manager
+>
 > 3=>size
 
 To join two tables together
@@ -213,9 +217,13 @@ common.table_for_each(common.table_combine(materials, equipment))
 ```
 
 > 1=>bricks
+>
 > 2=>concrete
+>
 > 3=>steel
+>
 > 4=>truck
+>
 > 5=>crane
 
 To search for values from a table inside another table so that the result is only the values that matched both tables
@@ -227,6 +235,7 @@ common.table_for_each(common.table_intersect(materials, equipment))
 ```
 
 > 1=>concrete
+>
 > 2=>truck
 
 To sort values in descending order from a table
@@ -237,7 +246,11 @@ common.table_for_each(common.table_sort(materials, common.SORT_DESC))
 ```
 
 > 1=>truck
+>
 > 2=>steel
+>
 > 3=>crane
+>
 > 4=>concrete
+>
 > 5=>bricks
