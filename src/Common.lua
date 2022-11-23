@@ -322,7 +322,477 @@ function common.table_pop(table)
     return v
 end
 
+---
+--- Compare two tables checking if they contain the same pair of entries.
+--- All keys and values are cast to string through the 'tostring' function.
+--- If both tables are array tables then order is respected.
+--- @param table_1 table The first table.
+--- @param table_2 table The second table.
+--- @return boolean True if and only if the both tables have the same pair of entries.
+---
+function common.table_equals(table_1, table_2)
+    if type(table_1) ~= 'table' or type(table_2) ~= 'table' then return false end
+    if common.table_count(table_1) ~= common.table_count(table_2) then return false end
+    if common.table_is_array(table_1) and common.table_is_array(table_2) then -- array mode
+        for i=1,#table_1 do
+            if tostring(table_1[i]) ~= tostring(table_2[i]) then return false end
+        end
+    else -- map mode
+        local exists = false
+        for k1,v1 in pairs(table_1) do
+            exists = false
+            for k2, v2 in pairs(table_2) do
+                if tostring(k1) == tostring(k2) and tostring(v1) == tostring(v2) then
+                    exists = true
+                end
+            end
+            if not exists then return false end
+        end
+    end
+    return true
+end
 
+-- COMMON STRING
+
+---
+--- A buffer for concatenating multiple strings more efficiently.
+--- Contains the methods append and tostring to add multiple strings and later convert this buffer to string.
+--- @param initial_string string A string to be added at the start of the buffer.
+--- @return table An object instance of the newly created string buffer.
+---
+function common.string_buffer(initial_string)
+    -- construct
+    local instance = {}
+    instance.table_for_each = common.table_for_each
+    if initial_string ~= nil then
+        instance.stack = {tostring(initial_string)}
+    else
+        instance.stack = {''}
+    end
+    ---
+    --- Add a string to the buffer
+    --- @param s string The string to add
+    --- @return table The instance of this string buffer
+    ---
+    function instance:append(s)
+        s = tostring(s)
+        table.insert(self.stack, s)    -- push 's' into the the stack
+        for i=table.getn(self.stack)-1, 1, -1 do
+            if string.len(self.stack[i]) > string.len(self.stack[i+1]) then
+                break
+            end
+            self.stack[i] = self.stack[i] .. table.remove(self.stack)
+        end
+        return self
+    end
+    ---
+    --- Convert this string buffer into a string
+    --- @return string The final string built from this string buffer
+    ---
+    function instance:tostring()
+        local bag = ''
+        self.table_for_each(self.stack, function (_,val) bag = bag .. val end)
+        return bag
+    end
+    return instance;
+end
+
+---
+--- Checks if the string contains the search string.
+--- @param haystack string The string to perform a search in.
+--- @param needle string The string to search for.
+--- @return boolean,number,number True if found then the start
+--- location and end location of the needle in the haystack.
+---
+function common.string_contains(haystack, needle)
+    local begin, finish = string.find(haystack, needle, 0, true)
+    if begin ~= nil then
+        return true, begin, finish
+    end
+    return false, 0, 0
+end
+
+---
+--- Strip whitespace characters from the beginning and end of a string.
+--- @param target string The string to operate on.
+--- @return string A new string with whitespace characters removed at the start and end.
+---
+function common.string_trim(target)
+    local i1,i2 = string.find(target,'^%s*')
+    if i2 >= i1 then
+        target = string.sub(target,i2+1)
+    end
+    i1,i2 = string.find(target,'%s*$')
+    if i2 >= i1 then
+        target = string.sub(target,1,i1-1)
+    end
+    return target
+end
+
+---
+--- Split the string into a table using the given delimiter.
+--- @param target string The target string.
+--- @param delimiter string The pattern or string marking the separation points.
+--- @return table A table containing strings around the delimiter or pattern match.
+---
+function common.string_split(target, delimiter)
+    local bag = {}
+    for item in string.gmatch(target, '[^'..delimiter..']+') do
+        bag[#bag+1] = item
+    end
+    return bag
+end
+
+---
+--- Concatenate the values of the given table using the provided delimiter.
+--- If the provided table is not a table type then nil is returned.
+--- If the table is an array table then order will be respected otherwise the table
+--- values are concatenated as is ignoring the keys.
+--- If the delimiter is not a string then an empty string is used instead.
+--- @param table table The table to operate on.
+--- @param delimiter string The string to separate the table values.
+--- @return string The concatenated values of the given table using provided delimiter
+---
+function common.string_join(table, delimiter)
+    if type(table) ~= 'table' then return nil end
+    if common.table_count(table) <= 1 then
+        for _,val in pairs(table) do return val end
+        return ''
+    end
+    local sb = common.string_buffer()
+    if type(delimiter) ~= 'string' then delimiter = '' end
+    if common.table_is_array(table) then
+        for index, val in ipairs(table) do
+            sb:append(val)
+            if index ~= #table then sb:append(delimiter) end
+        end
+    else
+        for _,val in pairs(table) do
+            sb:append(val):append(delimiter)
+        end
+        local bag = sb:tostring()
+        return string.sub(bag, 0, string.len(bag)-1)
+    end
+    return sb:tostring()
+end
+
+---
+--- Retrieve a single character from the input which is in the given index.
+--- The index must be a positive number and also it must be less than or equal to
+--- the input length otherwise an empty string is returned.
+--- @param input string The input string.
+--- @param index number The index where the character is located.
+--- @return string A string containing a single character.
+---
+function common.string_char_at(input, index)
+    if type(input) ~= 'string' then return nil end
+    if type(index) ~= 'number' or index < 1 or index > string.len(input) then return '' end
+    return string.sub(input, index, index)
+end
+
+---
+--- Searches the haystack for the needle and the replaces it with replacement a number of times provided.
+--- By default replacement is done throughout the entire string unless times is provided.
+--- @param haystack string The string to search in.
+--- @param needle string The string to search for.
+--- @param replacement string The replacement string
+--- @param times number Optional, the number of times to replace the needle if it occurs more than once.
+--- @return string, number A new string with all replacement operations performed and the number of replacements performed.
+---
+function common.string_replace(haystack, needle, replacement, times)
+    haystack = tostring(haystack)
+    needle = tostring(needle)
+    replacement = tostring(replacement)
+    return string.gsub(haystack, needle, replacement, times)
+end
+
+---
+--- Modify the target string such that the replacement string overwrites the contents of the target string
+--- starting from the start index.
+--- If the replacement string length exceeds the length of the target string when replacement occurs
+--- then the string is expanded to accommodate the replacement string.
+--- @param target string The target string.
+--- @param replacement string The replacement string.
+--- @param start_index number The index where to begin replacement on the target string.
+--- @return string The updated string
+---
+function common.string_update(target, replacement, start_index)
+    target = tostring(target)
+    replacement = tostring(replacement)
+    if type(start_index) ~= 'number' or start_index < 1 then start_index = 1 end
+    local prefix = string.sub(target, 1, start_index-1)
+    local suffix = string.sub(target, start_index+string.len(replacement))
+    return prefix .. replacement ..suffix
+end
+
+-- COMMON SYSTEM
+
+---
+--- Get the name of the current operating system.
+--- This method resolves to either 'unix' or 'windows'
+--- @return string The name of the operating system.
+---
+function common.system_name()
+    local sep = package.config:sub(1,1)
+    if sep == '/' then return 'unix' end
+    if sep == '\\' then return 'windows' end
+    return nil
+end
+
+---
+--- Read one line from standard input.
+--- The output of the prompt will not add a new line feed.
+--- @param prompt string The text to display before accepting input.
+--- @return string The read string
+---
+function common.system_read_line(prompt)
+    prompt = tostring(prompt)
+    io.stdout:write(prompt)
+    io.stdout:flush()
+    return io.stdin:read()
+end
+
+---
+--- Execute a command in the current operating system.
+--- @param command string The command to execute
+--- @return string The resulting string produced by the execution
+---
+function common.system_execute(command)
+    local handle = io.popen(command)
+    local result = handle:read('*all')
+    handle:close()
+    return result
+end
+
+---
+--- Retrieve the current working directory path for the current executing code.
+--- @return string The full current working directory path.
+---
+function common.system_working_dir()
+    if common.system_name() == 'windows' then
+        return common.system_execute('chdir')
+    end
+    return common.system_execute('pwd')
+end
+
+-- COMMON FILE SYSTEM
+
+---
+--- Checks whether a file exists in the file system.
+--- Note: does not work on directories
+--- @param filename string The path and filename.
+--- @return boolean True if file exists.
+---
+function common.file_exists(filename)
+    local f = io.open(filename, 'rb')
+    if f then f:close() end
+    return f ~= nil
+end
+
+---
+--- Read all the lines in the file into an array table.
+--- Returns an empty table if the file cannot be opened.
+--- @param filename string The path and filename.
+--- @return table The lines contained in the file.
+---
+function common.file_read_lines(filename)
+    if not common.file_exists(filename) then return {} end
+    local lines = {}
+    for line in io.lines(filename) do
+        lines[#lines + 1] = line
+    end
+    return lines
+end
+
+---
+--- Read all the contents of the file into a string.
+--- Returns nil if the file cannot be opened.
+--- @param filename string The path and filename.
+--- @return string The contents of the file.
+---
+function common.file_read_contents(filename)
+    local file = io.open(filename, 'rb')
+    if not file then return nil end
+    local content = file:read("*all")
+    file:close()
+    return content
+end
+
+---
+--- Write the contents of a string into the file.
+--- Note: clears the file first before writing.
+--- @param filename string The path and filename.
+--- @param content string The contents to write.
+--- @return boolean True if writing succeeded.
+---
+function common.file_write(filename, content)
+    local file = io.open(filename, 'w')
+    if not file then return false end
+    content = tostring(content)
+    file:write(content)
+    file:close()
+    return true
+end
+
+---
+--- Appends the contents of the string into the end of the file.
+--- @param filename string The path and filename.
+--- @param content string The contents to write.
+--- @return boolean True if writing succeeded.
+---
+function common.file_append(filename, content)
+    local file = io.open(filename, 'a')
+    if not file then return false end
+    content = tostring(content)
+    file:write(content)
+    file:close()
+    return true
+end
+
+---
+--- The size of the file in bytes.
+--- @param filename string The path and filename.
+--- @return number The number of bytes.
+---
+function common.file_size(filename)
+    local file = io.open(filename, 'r')
+    if not file then return nil end
+    return file:seek('end')
+end
+
+---
+--- Alias for os.remove
+---
+function common.file_delete(filename)
+    return os.remove(filename)
+end
+
+---
+--- Alias for os.rename
+---
+function common.file_rename(old_filename, new_filename)
+    return os.rename(old_filename, new_filename)
+end
+
+---
+--- List all the files in the given file path.
+--- @param filepath string The path to the directory or directory name.
+--- @return table The files in the given path.
+---
+function common.file_list(filepath)
+    if type(filepath) ~= 'string' then return nil end
+    if common.system_name() == 'windows' then
+        local result = common.system_execute('dir /b '..filepath)
+        result = common.string_trim(result)
+        return common.string_split(result, '\n')
+    else
+        local result = common.system_execute('ls '..filepath)
+        result = common.string_trim(result)
+        return common.string_split(result, '\n')
+    end
+end
+
+---
+--- The file separator for the current operating system.
+--- @return string The separator character.
+---
+function common.file_separator()
+    if common.system_name() == 'windows' then return '\\' end
+    return '/'
+end
+
+---
+--- Writes a table into a properties file.
+--- Note: The implementation lacks many of properties file specifications.
+--- The table values must be of one of type string, number or boolean, any
+--- other type will be ignored.
+--- The comments can be a string each new line representing a new line of comments or
+--- a table where each value represent a new line of comments, comments as an array
+--- table will respect the order of the values.
+--- All Comments are written at the beginning of the file.
+--- @param filename string The filename to save the contents.
+--- @param input_table table The table containing the data to save.
+--- @param comments string|table The comments for the file.
+--- @return boolean True if operation succeeded.
+---
+function common.prop_write(filename, input_table, comments)
+    local buffer = common.string_buffer()
+    -- comments
+    local clines
+    if type(comments) == 'string' then
+       clines = common.string_split(comments, '\n')
+    end
+    if type(comments) == 'table' then clines = common.table_values(comments) end
+    if clines then
+        for _,val in ipairs(clines) do
+            buffer:append('# '..val..'\n')
+        end
+    end
+    for key,val in pairs(input_table) do
+        -- key
+        local valid_key = type(key) == 'string' or type(key) == 'number'
+        if valid_key then
+            key = string.gsub(key, '%s', '')
+            buffer:append(common.string_trim(key))
+        end
+        -- value
+        local valid_value = type(val) == 'string' or type(val) == 'number' or type(val) == 'boolean'
+        val = tostring(val)
+        if valid_key and valid_value then
+            val = common.string_trim(val)
+            val = common.string_replace(val, '\n', '')
+            buffer:append('=')
+            buffer:append(val)
+        end
+        -- line ending
+        if valid_key then buffer:append('\n') end
+    end
+    return common.file_write(filename, buffer:tostring())
+end
+
+---
+--- Read a properties file into a table.
+--- Note: The implementation lacks many of properties file specifications.
+--- The comments will be collected in a separate table, all comments in the
+--- file will be included regardless of their position in the file.
+--- Keys without values will be assigned an empty string.
+--- @param filename string The filename to read contents from.
+--- @return table, table The properties read from the file into key value pairs and
+--- the comments found in the file.
+---
+function common.prop_read(filename)
+    local prop_table = {}
+    local comments = {}
+    local file = common.file_read_lines(filename)
+    for _, line in ipairs(file) do
+        if common.string_char_at(line, 1) == '#' then
+            line = common.string_update(line, ' ', 1)
+            line = common.string_trim(line)
+            comments[#comments + 1] = line
+        else
+            line = common.string_trim(line)
+            local sepval, seploc = common.string_contains(line, '=')
+            if not sepval and line then
+                prop_table[line] = ''
+            else
+                local key = string.sub(line, 1, seploc-1)
+                local val = string.sub(line, seploc+1)
+                key = common.string_trim(key)
+                val = common.string_trim(val)
+                prop_table[key] = val
+            end
+        end
+    end
+    return prop_table, comments
+end
+
+-- COMMON DATE TIME
+
+-- COMMON JSON
+
+-- COMMON WEB (HTTP)
+
+-- COMMON CRYPTO
 
 
 return common;
