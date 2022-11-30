@@ -786,13 +786,62 @@ function common.prop_read(filename)
     return prop_table, comments
 end
 
+-- COMMON IP (HTTP, FTP, ETC)
+
+---
+--- Execute a URL and capture the result in a string.
+--- Warning: requires cURL software to be installed on the machine.
+--- Supports SSL secured connections.
+--- @param url string The full URL.
+--- @param post_data table Optional: POST data to include in the body of the request.
+--- @return string The response from the server
+---
+function common.http_execute(url, post_data)
+    local post_buffer = common.string_buffer()
+    if post_data ~= nil then
+        for key,val in pairs(post_data) do
+            post_buffer:append('-d "'..key..'='..val..'" ')
+        end
+    end
+    return common.system_execute('curl -s '..post_buffer:tostring()..' "'..url..'"')
+end
+
+---
+--- Download a file into the local system from a URL.
+--- Warning: requires cURL software to be installed on the machine.
+--- @param url string The full URL
+--- @param destination_file string The filename and path where the downloaded file will be stored.
+--- @param post_data table Optional: POST data to include in the body of the request.
+--- @return string
+---
+function common.http_file_download(url, destination_file, post_data)
+    local post_buffer = common.string_buffer()
+    if type(post_data) == 'table' then
+        for key,val in pairs(post_data) do
+            post_buffer:append('-d "'..key..'='..val..'" ')
+        end
+    end
+    return common.system_execute('curl -s '..post_buffer:tostring()..' -o "'
+            ..destination_file..'" "'..url..'"')
+end
+
+---
+--- Upload a file from the local system to a URL.
+--- Warning: requires cURL software to be installed on the machine.
+--- @param url string The full URL
+--- @param key string The POST request body input/key name for the file.
+--- @param source_file string The filename and path to an existing file which will be uploaded.
+--- @return string
+---
+function common.http_file_upload(url, key, source_file)
+    return common.system_execute('curl -s '..' -F "'
+            ..key..'=@'..source_file..'" "'..url..'"')
+end
+
 -- COMMON DATE TIME
 
 -- COMMON JSON
 
--- COMMON WEB (HTTP)
-
--- COMMON CRYPTO
 
 
 return common;
